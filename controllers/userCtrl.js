@@ -13,6 +13,8 @@ const { CLIENT_URL } = process.env
 
 const userCtrl = {
     register: async(req, res) => {
+        CLIENT_URL = req.headers.origin;
+        
         try {
 
             const { name, email, password } = req.body
@@ -38,8 +40,7 @@ const userCtrl = {
             }
                          
             const activation_token = createActivationToken(newUser)
-            console.log({activation_token})
-                
+                            
             const url = `${CLIENT_URL}/user/activate/${activation_token}`
             sendMail(email, url, "Verify your email address")
              
@@ -53,7 +54,7 @@ const userCtrl = {
         try {
             const { activation_token } = req.body
             const user = jwt.verify(activation_token, process.env.ACTIVATION_TOKEN_SECRET)
-            //console.log(user)
+            
             const { name, email, password } = user
 
             const check = await Users.findOne({ email })
@@ -81,22 +82,22 @@ const userCtrl = {
 
             const isMatch = await bcrypt.compare(password, user.password)
             if (!isMatch) return res.status(400).json({ msg: "Password is incorrect." })
-            //console.log(user)
+            
             const refresh_token = createRefreshToken({ id: user._id })
             res.cookie('refreshtoken', refresh_token, {
                 httpOnly: true,
-                path: '/user/refresh_token',
+                path: `/user/refresh_token`,//${req.headers.origin}
                 maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
             })
-
-            res.json({ msg: "Login success!" })
+            res.json({ msg: "Login success!", tkn: refresh_token })
+            
         } catch (err) {
             return res.status(500).json({ msg: err.message })
         }
     },
     getAccessToken: (req, res) => {
         try {
-            const rf_token = req.cookies.refreshtoken
+            const rf_token = req.cookies.refreshtoken||req.body.logintoken
             if (!rf_token) return res.status(400).json({ msg: "Please login now!" })
 
             jwt.verify(rf_token, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
@@ -110,6 +111,7 @@ const userCtrl = {
         }
     },
     forgotPassword: async(req, res) => {
+        CLIENT_URL = req.headers.origin;
         try {
             const { email } = req.body
             const user = await Users.findOne({ email })
@@ -127,7 +129,7 @@ const userCtrl = {
     resetPassword: async(req, res) => {
         try {
             const { password } = req.body
-            console.log(password)
+            
             const passwordHash = await bcrypt.hash(password, 12)
 
             await Users.findOneAndUpdate({ _id: req.user.id }, {
